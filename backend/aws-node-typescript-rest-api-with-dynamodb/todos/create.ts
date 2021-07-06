@@ -9,7 +9,7 @@ const dynamoDb = new DynamoDB.DocumentClient()
 export const create = (event, context, callback) => {
   const timestamp = new Date().getTime()
   const data = JSON.parse(event.body)
-  if (typeof data.text !== 'string') {
+  if (typeof data.title !== 'string') {
     console.error('Validation Failed')
     callback(new Error('Couldn\'t create the todo item.'))
     return
@@ -19,7 +19,8 @@ export const create = (event, context, callback) => {
     TableName: process.env.DYNAMODB_TABLE,
     Item: {
       id: uuid.v1(),
-      text: data.text,
+      title: data.title,
+      completed: data.completed,
       checked: false,
       createdAt: timestamp,
       updatedAt: timestamp

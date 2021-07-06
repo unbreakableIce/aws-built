@@ -28,7 +28,7 @@ export  const update = (event, context, callback) => {
       '#todo_text': 'text',
     },
     ExpressionAttributeValues: {
-      ':text': data.text,
+      ':title': data.title,
       ':checked': data.checked,
       ':updatedAt': timestamp,
     },

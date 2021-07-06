@@ -21,6 +21,12 @@
 <section class="todoapp">
     <header class="header">
         <h1>todos-cloud</h1>
+        <button
+                class="clear-completed"
+                @click="syncTodos"
+        >
+            Sync with Server
+        </button>
         <input
                 class="new-todo"
                 autofocus
@@ -90,6 +96,7 @@
         >
             Clear completed
         </button>
+
     </footer>
 </section>
 <footer class="info">
@@ -101,23 +108,18 @@
 <script>
     // Full spec-compliant TodoMVC with localStorage persistence
     // and hash-based routing in ~120 effective lines of JavaScript.
+    var AMAZON_ENDPOINT_LIST_TODOS = 'https://[replace-me].execute-api.us-east-1.amazonaws.com/dev/todos'
+    var AMAZON_ENDPOINT_GET_TODO = 'https://[replace-me].execute-api.us-east-1.amazonaws.com/dev/todos/{id}'
+    var AMAZON_ENDPOINT_CREATE_TODO = 'https://[replace-me].execute-api.us-east-1.amazonaws.com/dev/todos'
+    var AMAZON_ENDPOINT_UPDATE_TODO = 'https://[replace-me].execute-api.us-east-1.amazonaws.com/dev/todos/{id}'
 
     // localStorage persistence
-    //var STORAGE_KEY = "todos-vuejs-2.0";
+    var STORAGE_KEY = "todos-aws";
     var todoStorage = {
         fetch: function () {
             var todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-            todos.forEach(function (todo, index) {
-                todo.id = index;
-            });
             todoStorage.uid = todos.length;
-            return axios
-                .get('https://XXXX.execute-api.us-east-1.amazonaws.com/dev/todos')
-                .then(response => {
-                        console.log(response)
-                        response.data
-                    }
-                );
+            return todos;
         },
         save: function (todos) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
@@ -143,112 +145,135 @@
 
     // app Vue instance
     var app = new Vue({
-        // app initial state
-        data: {
-            todos: todoStorage.fetch(),
-            newTodo: "",
-            editedTodo: null,
-            visibility: "all"
-        },
-
-        // // watch todos change for localStorage persistence
-        // watch: {
-        //     todos: {
-        //         handler: function (todos) {
-        //             todoStorage.save(todos);
-        //         },
-        //         deep: true
-        //     }
-        // },
-
-        // computed properties
-        // http://vuejs.org/guide/computed.html
-        computed: {
-            filteredTodos: function () {
-                return filters[this.visibility](this.todos);
+            // app initial state
+            data: {
+                todos: todoStorage.fetch(),
+                newTodo: "",
+                editedTodo: null,
+                visibility: "all"
             },
-            remaining: function () {
-                return filters.active(this.todos).length;
-            },
-            allDone: {
-                get: function () {
-                    return this.remaining === 0;
+
+
+            // // watch todos change for localStorage persistence
+            // watch: {
+            //     todos: {
+            //         handler: function (todos) {
+            //             todoStorage.save(todos);
+            //         },
+            //         deep: true
+            //     }
+            // },
+
+            // computed properties
+            // http://vuejs.org/guide/computed.html
+            computed: {
+                filteredTodos: function () {
+                    return filters[this.visibility](this.todos);
                 },
-                set: function (value) {
-                    this.todos.forEach(function (todo) {
-                        todo.completed = value;
-                    });
-                }
-            }
-        },
-
-        filters: {
-            pluralize: function (n) {
-                return n === 1 ? "item" : "items";
-            }
-        },
-
-        // methods that implement data logic.
-        // note there's no DOM manipulation here at all.
-        methods: {
-            addTodo: async function () {
-                var value = this.newTodo && this.newTodo.trim();
-                if (!value) {
-                    return;
-                }
-
-                const res = await axios.post('https://XXXXX.execute-api.us-east-1.amazonaws.com/dev/todos', {text: value});
-                console.log()
-                this.todos.push({
-                    id: res.data.id,
-                    title: value,
-                    completed: false
-                });
-                this.newTodo = "";
-
-            },
-
-            removeTodo: function (todo) {
-                this.todos.splice(this.todos.indexOf(todo), 1);
-            },
-
-            editTodo: function (todo) {
-                this.beforeEditCache = todo.title;
-                this.editedTodo = todo;
-            },
-
-            doneEdit: function (todo) {
-                if (!this.editedTodo) {
-                    return;
-                }
-                this.editedTodo = null;
-                todo.title = todo.title.trim();
-                if (!todo.title) {
-                    this.removeTodo(todo);
+                remaining: function () {
+                    return filters.active(this.todos).length;
+                },
+                allDone: {
+                    get: function () {
+                        return this.remaining === 0;
+                    },
+                    set: function (value) {
+                        this.todos.forEach(function (todo) {
+                            todo.completed = value;
+                        });
+                    }
                 }
             },
 
-            cancelEdit: function (todo) {
-                this.editedTodo = null;
-                todo.title = this.beforeEditCache;
+            filters: {
+                pluralize: function (n) {
+                    return n === 1 ? "item" : "items";
+                }
             },
 
-            removeCompleted: function () {
-                this.todos = filters.active(this.todos);
-            }
-        },
+            // methods that implement data logic.
+            // note there's no DOM manipulation here at all.
+            methods: {
+                addTodo: function () {
+                    var value = this.newTodo && this.newTodo.trim();
+                    if (!value) {
+                        return;
+                    }
 
-        // a custom directive to wait for the DOM to be updated
-        // before focusing on the input field.
-        // http://vuejs.org/guide/custom-directive.html
-        directives: {
-            "todo-focus": function (el, binding) {
-                if (binding.value) {
-                    el.focus();
+                    axios.post(AMAZON_ENDPOINT_CREATE_TODO,
+                        {
+                            title: value,
+                            completed: false
+                        })
+                        .then(response => {
+                            console.log(response)
+                            this.todos.push({
+                                id: response.data.id,
+                                title: value,
+                                completed: false
+                            });
+
+                            this.newTodo = "";
+                            todoStorage.save(this.todos)
+
+                        });
+                },
+
+                removeTodo: function (todo) {
+                    this.todos.splice(this.todos.indexOf(todo), 1);
+                    //HOMEWORK - ADD THE CODE to remove TODO FROM AWS
+                },
+
+                editTodo: function (todo) {
+                    this.beforeEditCache = todo.title;
+                    this.editedTodo = todo;
+                    //HOMEWORK - Add the code to  update TODO FROM AWS
+                },
+
+                doneEdit: function (todo) {
+                    if (!this.editedTodo) {
+                        return;
+                    }
+                    this.editedTodo = null;
+                    todo.title = todo.title.trim();
+                    if (!todo.title) {
+                        this.removeTodo(todo);
+                    }
+                },
+
+                cancelEdit: function (todo) {
+                    this.editedTodo = null;
+                    todo.title = this.beforeEditCache;
+                },
+
+                removeCompleted: function () {
+                    this.todos = filters.active(this.todos);
+                },
+
+                syncTodos: function () {
+                    axios
+                        .get(AMAZON_ENDPOINT_LIST_TODOS)
+                        .then(response => {
+                            console.log(response.data)
+                            this.todos = response.data;
+                            todoStorage.save(this.todos);
+                        });
                 }
-            }
-        }
-    });
+            },
+
+            // a custom directive to wait for the DOM to be updated
+            // before focusing on the input field.
+            // http://vuejs.org/guide/custom-directive.html
+            directives:
+                {
+                    "todo-focus": function (el, binding) {
+                        if (binding.value) {
+                            el.focus();
+                        }
+                    }
+                }
+        })
+    ;
 
     // handle routing
     function onHashChange() {
